@@ -69,8 +69,22 @@ router.post('/campaigns', (req, res) => {
 });
 
 router.delete('/campaigns/:id', (req, res) => {
-    db.prepare('DELETE FROM email_campaigns WHERE id = ?').run(req.params.id);
-    res.status(204).end();
+    try {
+        const id = req.params.id;
+
+        // Use a transaction to ensure both logs and campaign are deleted
+        const deleteTx = db.transaction(() => {
+            // Delete logs first to avoid foreign key constraints if CASCADE is not working
+            db.prepare('DELETE FROM email_logs WHERE campaign_id = ?').run(id);
+            db.prepare('DELETE FROM email_campaigns WHERE id = ?').run(id);
+        });
+
+        deleteTx();
+        res.status(204).end();
+    } catch (error: any) {
+        console.error(`Failed to delete campaign ${req.params.id}:`, error.message);
+        res.status(500).json({ error: 'Failed to delete campaign', details: error.message });
+    }
 });
 
 router.patch('/campaigns/:id/status', (req, res) => {

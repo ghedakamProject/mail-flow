@@ -161,85 +161,92 @@ export const processCampaign = async (campaignId: string, baseUrl: string) => {
     let failedCount = 0;
 
     for (let i = 0; i < recipients.length; i++) {
-        // Check for pause or cancellation
-        let currentStatus = (db.prepare('SELECT status FROM email_campaigns WHERE id = ?').get(campaignId) as any)?.status;
+        try {
+            // Check for pause or cancellation
+            let currentStatus = (db.prepare('SELECT status FROM email_campaigns WHERE id = ?').get(campaignId) as any)?.status;
 
-        while (currentStatus === 'paused') {
-            await sleep(5); // Wait 5 seconds and check again
-            currentStatus = (db.prepare('SELECT status FROM email_campaigns WHERE id = ?').get(campaignId) as any)?.status;
-        }
+            while (currentStatus === 'paused') {
+                await sleep(5); // Wait 5 seconds and check again
+                currentStatus = (db.prepare('SELECT status FROM email_campaigns WHERE id = ?').get(campaignId) as any)?.status;
+            }
 
-        if (currentStatus !== 'sending') {
-            console.log(`Campaign ${campaignId} stopped (status: ${currentStatus})`);
-            return;
-        }
+            if (currentStatus !== 'sending') {
+                console.log(`Campaign ${campaignId} stopped (status: ${currentStatus})`);
+                return;
+            }
 
-        const recipient = recipients[i];
-        const logId = uuidv4();
+            const recipient = recipients[i];
+            const logId = uuidv4();
 
-        db.prepare(`
+            db.prepare(`
       INSERT INTO email_logs (id, campaign_id, recipient_id, recipient_email, status)
       VALUES (?, ?, ?, ?, ?)
     `).run(logId, campaignId, recipient.id, recipient.email, 'pending');
 
-        const personalizedHtml = processTemplateVariables(
-            baseHtmlContent,
-            recipient,
-            logId,
-            config.tracking_enabled === 1,
-            baseUrl
-        );
+            const personalizedHtml = processTemplateVariables(
+                baseHtmlContent,
+                recipient,
+                logId,
+                config.tracking_enabled === 1,
+                baseUrl
+            );
 
-        let result;
-        if (config.provider === 'mailgun') {
-            result = await sendWithMailgun(
-                recipient.email,
-                campaign.subject,
-                personalizedHtml,
-                config.from_email,
-                config.from_name,
-                config.mailgun_api_key,
-                config.mailgun_domain,
-                config.mailgun_region
-            );
-        } else if (config.provider === 'smtp') {
-            result = await sendWithSMTP(
-                recipient.email,
-                campaign.subject,
-                personalizedHtml,
-                config.from_email,
-                config.from_name,
-                config.smtp_host,
-                config.smtp_port,
-                config.smtp_user,
-                config.smtp_pass,
-                config.smtp_secure === 1
-            );
-        } else {
-            // Default to SendGrid
-            result = await sendWithSendGrid(
-                recipient.email,
-                campaign.subject,
-                personalizedHtml,
-                config.from_email,
-                config.from_name,
-                config.api_key
-            );
-        }
+            let result;
+            if (config.provider === 'mailgun') {
+                result = await sendWithMailgun(
+                    recipient.email,
+                    campaign.subject,
+                    personalizedHtml,
+                    config.from_email,
+                    config.from_name,
+                    config.mailgun_api_key,
+                    config.mailgun_domain,
+                    config.mailgun_region
+                );
+            } else if (config.provider === 'smtp') {
+                result = await sendWithSMTP(
+                    recipient.email,
+                    campaign.subject,
+                    personalizedHtml,
+                    config.from_email,
+                    config.from_name,
+                    config.smtp_host,
+                    config.smtp_port,
+                    config.smtp_user,
+                    config.smtp_pass,
+                    config.smtp_secure === 1
+                );
+            } else {
+                // Default to SendGrid
+                result = await sendWithSendGrid(
+                    recipient.email,
+                    campaign.subject,
+                    personalizedHtml,
+                    config.from_email,
+                    config.from_name,
+                    config.api_key
+                );
+            }
 
-        db.prepare(`
+            db.prepare(`
       UPDATE email_logs SET status = ?, error_message = ?, sent_at = CURRENT_TIMESTAMP WHERE id = ?
     `).run(result.success ? 'sent' : 'failed', result.error ? JSON.stringify(result.error) : null, logId);
 
-        db.prepare('UPDATE email_recipients SET status = ? WHERE id = ?').run(result.success ? 'sent' : 'failed', recipient.id);
+            db.prepare('UPDATE email_recipients SET status = ? WHERE id = ?').run(result.success ? 'sent' : 'failed', recipient.id);
 
-        if (result.success) sentCount++;
-        else failedCount++;
+            if (result.success) sentCount++;
+            else failedCount++;
 
-        db.prepare('UPDATE email_campaigns SET sent_count = ?, failed_count = ? WHERE id = ?').run(sentCount, failedCount, campaignId);
+            db.prepare('UPDATE email_campaigns SET sent_count = ?, failed_count = ? WHERE id = ?').run(sentCount, failedCount, campaignId);
 
-        if (i < recipients.length - 1 && campaign.delay_seconds > 0) {
-            await sleep(campaign.delay_seconds);
+            if (i < recipients.length - 1 && campaign.delay_seconds > 0) {
+                await sleep(campaign.delay_seconds);
+            }
+        } catch (error: any) {
+            console.error(`Error processing recipient in campaign ${campaignId}:`, error.message);
+            // If campaign is missing, stop
+            const status = (db.prepare('SELECT status FROM email_campaigns WHERE id = ?').get(campaignId) as any)?.status;
+            if (!status) return;
         }
     }
 
