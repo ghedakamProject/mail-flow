@@ -2,17 +2,39 @@
 
 **Mail Muse** is a sleek, powerful, and self-hosted email marketing platform designed for simplicity and flexibility. Send beautiful campaigns using your own infrastructure or popular email providers.
 
-![Mail Muse Banner](https://images.unsplash.com/photo-1557200134-90327ee9fafa?auto=format&fit=crop&q=80&w=1200&h=400)
+## 🖼️ UI Screenshots
+
+| Dashboard | Analytics |
+|:---:|:---:|
+| ![Dashboard](assets/screenshots/dashboard.png) | ![Analytics](assets/screenshots/analytics.png) |
+
+| Settings |
+|:---:|
+| ![Settings](assets/screenshots/settings.png) |
 
 ## ✨ Features
 
-- **Multi-Provider Support**: Choose between SendGrid, Mailgun, or your own Custom SMTP server.
-- **Campaign Management**: Create, schedule, and track email campaigns with ease.
-- **Template System**: Build beautiful HTML templates with dynamic variables like `{{name}}` and `{{email}}`.
-- **Real-time Analytics**: Track email opens, sent counts, and failure rates in real-time.
-- **Recipient Lists**: Manage and segment your audience effortlessly.
-- **Telegram Integration**: Get instant notifications on your phone when campaigns complete.
-- **Self-Hosted**: Built with Vite, React, Express, and a local SQLite database.
+### 🎨 Premium UI/UX
+- **Futuristic Aesthetic**: Modern dark-themed design with vibrant accents and glassmorphism.
+- **Micro-animations**: Smooth transitions and hover effects using Framer Motion.
+- **Responsive Layout**: Fully adaptive interface for desktop and tablet views.
+- **Dynamic Charts**: Interactive data visualization powered by Recharts.
+
+### 🔌 Multi-Provider Support
+- **SendGrid**: Integrated API delivery with tracking.
+- **Mailgun**: High-deliverability API support.
+- **Custom SMTP**: Support for Gmail, Outlook, or your own mail servers.
+- **Conditional Configuration**: Dynamic forms that adapt to your chosen provider.
+
+### 📊 Campaign Management & Analytics
+- **Template Builder**: Create reusable HTML templates with dynamic variable support (`{{name}}`, `{{email}}`).
+- **Scheduling**: Plan your campaigns and let the system handle background delivery.
+- **Real-time Stats**: Track total campaigns, recipients, successful sends, and failures.
+- **Granular Filtering**: Filter analytics data by specific campaigns to measure individual performance.
+
+### 🤖 Automation & Notifications
+- **Telegram Integration**: Receive instant alerts on your mobile device when campaigns finish.
+- **Background Jobs**: Robust job queue management for reliable email dispatch.
 
 ## 🚀 Quick Start
 
