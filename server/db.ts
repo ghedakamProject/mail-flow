@@ -69,6 +69,10 @@ export const initDb = () => {
     )
   `);
 
+  // Create indices for better performance
+  db.exec('CREATE INDEX IF NOT EXISTS idx_email_logs_campaign_id ON email_logs(campaign_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_email_logs_recipient_id ON email_logs(recipient_id)');
+
   // Create mail_config table
   db.exec(`
     CREATE TABLE IF NOT EXISTS mail_config (

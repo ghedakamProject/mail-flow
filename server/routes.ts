@@ -20,8 +20,27 @@ router.post('/recipients', (req, res) => {
 });
 
 router.delete('/recipients/:id', (req, res) => {
-    db.prepare('DELETE FROM email_recipients WHERE id = ?').run(req.params.id);
-    res.status(204).end();
+    try {
+        const { id } = req.params;
+
+        // Use a transaction to ensure both logs and recipient are deleted
+        const deleteTx = db.transaction(() => {
+            // Delete associated logs first to avoid any potential constraint issues or slow CASCADE
+            db.prepare('DELETE FROM email_logs WHERE recipient_id = ?').run(id);
+            // Then delete the recipient
+            db.prepare('DELETE FROM email_recipients WHERE id = ?').run(id);
+        });
+
+        deleteTx();
+        res.status(204).end();
+    } catch (error: any) {
+        console.error(`ERROR: Failed to delete recipient ${req.params.id}:`, error);
+        res.status(500).json({
+            error: 'Failed to delete recipient',
+            message: error.message,
+            stack: error.stack
+        });
+    }
 });
 
 // --- Templates ---
