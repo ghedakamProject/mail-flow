@@ -58,7 +58,7 @@ server {
     server_name 143.244.142.6; # Your server IP
 
     location / {
-        proxy_pass http://localhost:3001; # Point to the Node server root
+        proxy_pass http://localhost:3001; # IMPORTANT: No "/api" at the end
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -66,6 +66,9 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 }
+
+> [!WARNING]
+> Ensure your `proxy_pass` does **NOT** end with `/api`. Since the Express app now handles the prefix and serves the frontend, pointing Nginx to `/api` will cause "double prefixing" errors (like `/apiapi`) and prevent the frontend from loading.
 ```
 
 Enable the site and restart Nginx:
