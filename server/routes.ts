@@ -82,8 +82,12 @@ router.delete('/campaigns/:id', (req, res) => {
         deleteTx();
         res.status(204).end();
     } catch (error: any) {
-        console.error(`Failed to delete campaign ${req.params.id}:`, error.message);
-        res.status(500).json({ error: 'Failed to delete campaign', details: error.message });
+        console.error(`ERROR: Failed to delete campaign ${req.params.id}:`, error);
+        res.status(500).json({
+            error: 'Failed to delete campaign',
+            message: error.message,
+            stack: error.stack
+        });
     }
 });
 
@@ -113,14 +117,14 @@ router.post('/config', (req, res) => {
         db.prepare(`
       UPDATE mail_config SET 
         provider = ?, from_email = ?, from_name = ?, api_key = ?, 
-        mailgun_api_key = ?, mailgun_domain = ?,
+        mailgun_api_key = ?, mailgun_domain = ?, mailgun_region = ?,
         smtp_host = ?, smtp_port = ?, smtp_user = ?, smtp_pass = ?, smtp_secure = ?,
         is_configured = ?, tracking_enabled = ?, telegram_notifications_enabled = ?, 
         telegram_bot_token = ?, telegram_chat_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
             provider || 'sendgrid', from_email, from_name, api_key,
-            mailgun_api_key, mailgun_domain,
+            mailgun_api_key, mailgun_domain, req.body.mailgun_region || 'us',
             smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure ? 1 : 0,
             is_configured ? 1 : 0, tracking_enabled ? 1 : 0, telegram_notifications_enabled ? 1 : 0,
             telegram_bot_token, telegram_chat_id, currentConfig.id
@@ -129,14 +133,14 @@ router.post('/config', (req, res) => {
         db.prepare(`
       INSERT INTO mail_config (
         id, provider, from_email, from_name, api_key, 
-        mailgun_api_key, mailgun_domain,
+        mailgun_api_key, mailgun_domain, mailgun_region,
         smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure,
         is_configured, tracking_enabled, telegram_notifications_enabled, telegram_bot_token, telegram_chat_id
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
             uuidv4(), provider || 'sendgrid', from_email, from_name, api_key,
-            mailgun_api_key, mailgun_domain,
+            mailgun_api_key, mailgun_domain, req.body.mailgun_region || 'us',
             smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure ? 1 : 0,
             is_configured ? 1 : 0, tracking_enabled ? 1 : 0, telegram_notifications_enabled ? 1 : 0, telegram_bot_token, telegram_chat_id
         );

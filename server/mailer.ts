@@ -12,7 +12,7 @@ const processTemplateVariables = (
     trackingEnabled: boolean,
     baseUrl: string
 ): string => {
-    let processed = htmlContent;
+    let processed = htmlContent || '';
     processed = processed.replace(/\{\{name\}\}/gi, recipient.name || recipient.email.split('@')[0]);
     processed = processed.replace(/\{\{email\}\}/gi, recipient.email);
 
