@@ -37,7 +37,9 @@ This generates a `dist` directory containing the optimized frontend assets and t
    ```
 5. Restart your process runner (e.g., PM2):
    ```bash
-   pm2 restart mail-muse-api
+   pm2 restart mail-muse
+   # or if first time:
+   pm2 start "npm run start" --name mail-muse
    ```
 
 ### Method B: Git-based Deployment
