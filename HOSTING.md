@@ -55,10 +55,10 @@ Add the following (replace `yourdomain.com` and `3001` with your actual domain a
 ```nginx
 server {
     listen 80;
-    server_name 143.244.142.6;
+    server_name 143.244.142.6; # Your server IP
 
     location / {
-        proxy_pass http://localhost:3001/api; # Backend port
+        proxy_pass http://localhost:3001; # Point to the Node server root
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';

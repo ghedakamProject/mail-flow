@@ -1,11 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { initDb } from './db.js';
 import apiRoutes from './routes.js';
 import { processCampaign } from './mailer.js';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -42,6 +47,21 @@ app.get('/api/track-email', (req, res) => {
         'Content-Length': pixel.length,
     });
     res.end(pixel);
+});
+
+// Serve Static Files in Production
+// Assume server is in dist/server/ index.js and static files are in dist/
+const distPath = path.resolve(__dirname, '..');
+app.use(express.static(distPath));
+
+// Catch-all to serve index.html for SPA
+app.get('*', (req, res) => {
+    // Only serve index.html if it's not an API route
+    if (!req.path.startsWith('/api')) {
+        res.sendFile(path.join(distPath, 'index.html'));
+    } else {
+        res.status(404).json({ error: 'API route not found' });
+    }
 });
 
 app.listen(port, () => {
