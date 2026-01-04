@@ -39,6 +39,7 @@ export default function Settings() {
   // Mailgun State
   const [mailgunApiKey, setMailgunApiKey] = useState('');
   const [mailgunDomain, setMailgunDomain] = useState('');
+  const [mailgunRegion, setMailgunRegion] = useState<'us' | 'eu'>('us');
   const [showMailgunKey, setShowMailgunKey] = useState(false);
 
   // SMTP State
@@ -66,6 +67,7 @@ export default function Settings() {
       setApiKey(config.api_key || '');
       setMailgunApiKey(config.mailgun_api_key || '');
       setMailgunDomain(config.mailgun_domain || '');
+      setMailgunRegion(config.mailgun_region || 'us');
       setSmtpHost(config.smtp_host || '');
       setSmtpPort(config.smtp_port?.toString() || '587');
       setSmtpUser(config.smtp_user || '');
@@ -86,6 +88,7 @@ export default function Settings() {
       api_key: apiKey,
       mailgun_api_key: mailgunApiKey,
       mailgun_domain: mailgunDomain,
+      mailgun_region: mailgunRegion,
       smtp_host: smtpHost,
       smtp_port: parseInt(smtpPort),
       smtp_user: smtpUser,
@@ -104,6 +107,7 @@ export default function Settings() {
       setApiKey(config.api_key || '');
       setMailgunApiKey(config.mailgun_api_key || '');
       setMailgunDomain(config.mailgun_domain || '');
+      setMailgunRegion(config.mailgun_region || 'us');
       setSmtpHost(config.smtp_host || '');
       setSmtpPort(config.smtp_port?.toString() || '587');
       setSmtpUser(config.smtp_user || '');
@@ -306,6 +310,18 @@ export default function Settings() {
                         value={mailgunDomain}
                         onChange={(e) => setMailgunDomain(e.target.value)}
                       />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Mailgun Region</label>
+                      <Select value={mailgunRegion} onValueChange={(v) => setMailgunRegion(v as 'us' | 'eu')}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Region" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="us">US (api.mailgun.net)</SelectItem>
+                          <SelectItem value="eu">EU (api.eu.mailgun.net)</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 )}

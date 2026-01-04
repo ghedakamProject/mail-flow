@@ -71,14 +71,18 @@ const sendWithMailgun = async (
     fromEmail: string,
     fromName: string,
     apiKey: string,
-    domain: string
+    domain: string,
+    region: string = 'us'
 ) => {
     try {
         const auth = Buffer.from(`api:${apiKey}`).toString('base64');
+        const baseUrl = region === 'eu' ? 'https://api.eu.mailgun.net' : 'https://api.mailgun.net';
+        const from = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
+
         await axios.post(
-            `https://api.mailgun.net/v3/${domain}/messages`,
+            `${baseUrl}/v3/${domain}/messages`,
             new URLSearchParams({
-                from: `${fromName} <${fromEmail}>`,
+                from,
                 to,
                 subject,
                 html: htmlContent,
@@ -140,6 +144,8 @@ export const processCampaign = async (campaignId: string, baseUrl: string) => {
         return;
     }
 
+    console.log(`Starting campaign ${campaignId} using ${config.provider} provider`);
+
     const recipientIds = JSON.parse(campaign.recipient_ids);
     const recipients = db.prepare(`SELECT * FROM email_recipients WHERE id IN (${recipientIds.map(() => '?').join(',')})`).all(...recipientIds) as any[];
 
@@ -180,7 +186,8 @@ export const processCampaign = async (campaignId: string, baseUrl: string) => {
                 config.from_email,
                 config.from_name,
                 config.mailgun_api_key,
-                config.mailgun_domain
+                config.mailgun_domain,
+                config.mailgun_region
             );
         } else if (config.provider === 'smtp') {
             result = await sendWithSMTP(

@@ -79,6 +79,7 @@ export const initDb = () => {
       api_key TEXT, -- SendGrid API Key
       mailgun_api_key TEXT,
       mailgun_domain TEXT,
+      mailgun_region TEXT DEFAULT 'us',
       smtp_host TEXT,
       smtp_port INTEGER,
       smtp_user TEXT,
@@ -107,6 +108,14 @@ export const initDb = () => {
     }
   } catch (e) {
     console.error('Migration failed or not needed:', e);
+  }
+
+  // Ensure mailgun_region exists in mail_config
+  try {
+    db.exec("ALTER TABLE mail_config ADD COLUMN mailgun_region TEXT DEFAULT 'us'");
+    console.log('Added mailgun_region column to mail_config');
+  } catch (e) {
+    // Column likely already exists
   }
 
   // Insert default config if it doesn't exist

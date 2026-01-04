@@ -12,6 +12,7 @@ export interface MailConfig {
   api_key?: string; // SendGrid
   mailgun_api_key?: string;
   mailgun_domain?: string;
+  mailgun_region?: 'us' | 'eu';
   smtp_host?: string;
   smtp_port?: number;
   smtp_user?: string;
