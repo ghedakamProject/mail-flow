@@ -24,6 +24,11 @@ initDb();
 // API Routes
 app.use('/api', apiRoutes);
 
+// Root API info
+app.get('/api', (req, res) => {
+    res.json({ message: 'Mail Muse API is running', version: '1.0.0' });
+});
+
 // Special route to start campaign (calls mailer logic)
 app.post('/api/campaigns/:id/start', async (req, res) => {
     const { id } = req.params;
@@ -50,7 +55,6 @@ app.get('/api/track-email', (req, res) => {
 });
 
 // Serve Static Files in Production
-// Assume server is in dist/server/ index.js and static files are in dist/
 const distPath = path.resolve(__dirname, '..');
 app.use(express.static(distPath));
 
@@ -60,7 +64,11 @@ app.get('*', (req, res) => {
     if (!req.path.startsWith('/api')) {
         res.sendFile(path.join(distPath, 'index.html'));
     } else {
-        res.status(404).json({ error: 'API route not found' });
+        res.status(404).json({
+            error: 'API route not found',
+            path: req.path,
+            note: 'Ensure Nginx proxy_pass is NOT pointing to /api'
+        });
     }
 });
 
