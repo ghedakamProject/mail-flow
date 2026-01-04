@@ -161,6 +161,19 @@ export const processCampaign = async (campaignId: string, baseUrl: string) => {
     let failedCount = 0;
 
     for (let i = 0; i < recipients.length; i++) {
+        // Check for pause or cancellation
+        let currentStatus = (db.prepare('SELECT status FROM email_campaigns WHERE id = ?').get(campaignId) as any)?.status;
+
+        while (currentStatus === 'paused') {
+            await sleep(5); // Wait 5 seconds and check again
+            currentStatus = (db.prepare('SELECT status FROM email_campaigns WHERE id = ?').get(campaignId) as any)?.status;
+        }
+
+        if (currentStatus !== 'sending') {
+            console.log(`Campaign ${campaignId} stopped (status: ${currentStatus})`);
+            return;
+        }
+
         const recipient = recipients[i];
         const logId = uuidv4();
 

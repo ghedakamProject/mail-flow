@@ -15,6 +15,7 @@ import { useEmailStats } from '@/hooks/useEmailStats';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+  { icon: Send, label: 'Campaigns', path: '/campaigns' },
   { icon: Users, label: 'Recipients', path: '/recipients' },
   { icon: Mail, label: 'Compose', path: '/compose' },
   { icon: FileCode, label: 'Templates', path: '/templates' },

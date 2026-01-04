@@ -73,6 +73,12 @@ router.delete('/campaigns/:id', (req, res) => {
     res.status(204).end();
 });
 
+router.patch('/campaigns/:id/status', (req, res) => {
+    const { status } = req.body;
+    db.prepare('UPDATE email_campaigns SET status = ? WHERE id = ?').run(status, req.params.id);
+    res.json({ success: true, status });
+});
+
 // --- Config ---
 router.get('/config', (req, res) => {
     const config = db.prepare('SELECT * FROM mail_config LIMIT 1').get();

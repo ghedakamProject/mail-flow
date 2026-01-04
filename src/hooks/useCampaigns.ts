@@ -103,11 +103,24 @@ export const useCampaigns = () => {
     },
   });
 
+  const updateCampaignStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      await api.patch(`/campaigns/${id}/status`, { status });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to update status: ${error.message}`);
+    },
+  });
+
   return {
     campaigns,
     isLoading,
     createCampaign: createCampaign.mutateAsync,
     startCampaign: startCampaign.mutate,
     deleteCampaign: deleteCampaign.mutate,
+    updateCampaignStatus: updateCampaignStatus.mutate,
   };
 };
