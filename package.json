@@ -7,10 +7,13 @@
     "dev": "vite",
     "server": "tsx server/index.ts",
     "dev:all": "concurrently \"npm run server\" \"npm run dev\"",
-    "build": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:frontend": "vite build",
+    "build": "npm run build:frontend && npm run build:server",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node dist/server/index.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

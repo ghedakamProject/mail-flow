@@ -33,14 +33,12 @@ npm run build
 ```
 
 ## 5. Configure PM2
-Start the backend and frontend (if serving via a custom server) or just the backend:
+Start the application using the integrated production script:
 ```bash
-# Start backend
-pm2 start dist/server/index.js --name mail-muse-api
-
-# If you want to use the build-in server to serve frontend as well,
-# ensure you build the frontend and serve it via Express.
+# Start the production server
+pm2 start "npm run start" --name mail-muse
 ```
+This will start the backend server, which is now correctly built into the `dist/server` directory.
 
 ## 6. Setup Nginx (Reverse Proxy)
 Install Nginx:
