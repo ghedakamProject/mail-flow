@@ -23,7 +23,20 @@ PM2 is a process manager that will keep your app running in the background:
 npm install pm2 -g
 ```
 
-## 4. Setup the Application
+## 4. Install PostgreSQL
+Install and configure the PostgreSQL database:
+```bash
+sudo apt install postgresql postgresql-contrib -y
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# Create database and user
+sudo -u postgres psql -c "CREATE DATABASE mail_muse;"
+sudo -u postgres psql -c "CREATE USER mailmuseuser WITH PASSWORD 'yourpassword';"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE mail_muse TO mailmuseuser;"
+```
+
+## 5. Setup the Application
 Clone your repository and install dependencies:
 ```bash
 git clone https://github.com/yourusername/mail-muse.git
@@ -32,15 +45,17 @@ npm install
 npm run build
 ```
 
-## 5. Configure PM2
+Configure your `.env` file with the `DATABASE_URL`:
+`DATABASE_URL=postgresql://mailmuseuser:yourpassword@localhost:5432/mail_muse`
+
+## 6. Configure PM2
 Start the application using the integrated production script:
 ```bash
 # Start the production server
 pm2 start "npm run start" --name mail-muse
 ```
-This will start the backend server, which is now correctly built into the `dist/server` directory.
 
-## 6. Setup Nginx (Reverse Proxy)
+## 7. Setup Nginx (Reverse Proxy)
 Install Nginx:
 ```bash
 sudo apt install nginx -y
@@ -66,10 +81,10 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 }
+```
 
 > [!WARNING]
 > Ensure your `proxy_pass` does **NOT** end with `/api`. Since the Express app now handles the prefix and serves the frontend, pointing Nginx to `/api` will cause "double prefixing" errors (like `/apiapi`) and prevent the frontend from loading.
-```
 
 Enable the site and restart Nginx:
 ```bash
@@ -78,15 +93,18 @@ sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-## 7. Setup SSL (Certbot)
+## 8. Setup SSL (Certbot)
 Secure your application with HTTPS:
 ```bash
 sudo apt install certbot python3-certbot-nginx -y
 sudo certbot --nginx -d yourdomain.com
 ```
 
-## 8. Backup Data
-The database is stored in `sqlite.db` (or as configured in `server/db.ts`). Ensure you back up this file regularly.
+## 9. Backup Data
+Ensure you back up your PostgreSQL database regularly using `pg_dump`:
+```bash
+pg_dump mail_muse > mail_muse_backup.sql
+```
 
 ---
 

@@ -71,7 +71,7 @@
 
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS, Shadcn UI, Framer Motion.
 - **Backend**: Node.js, Express.
-- **Database**: SQLite (via `better-sqlite3`).
+- **Database**: PostgreSQL (via `pg`).
 - **Mailing**: Nodemailer (SMTP), Axios (SendGrid/Mailgun APIs).
 
 ## 📖 Documentation

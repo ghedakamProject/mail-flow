@@ -134,27 +134,30 @@ const sendWithSMTP = async (
 };
 
 export const processCampaign = async (campaignId: string, baseUrl: string) => {
-    const campaign = db.prepare('SELECT * FROM email_campaigns WHERE id = ?').get(campaignId) as any;
+    const { rows: campaignRows } = await db.query('SELECT * FROM email_campaigns WHERE id = $1', [campaignId]);
+    const campaign = campaignRows[0];
     if (!campaign) return;
 
-    const config = db.prepare('SELECT * FROM mail_config LIMIT 1').get() as any;
+    const { rows: configRows } = await db.query('SELECT * FROM mail_config LIMIT 1');
+    const config = configRows[0];
     if (!config || !config.is_configured) {
         console.error('Email provider not configured');
-        db.prepare('UPDATE email_campaigns SET status = ? WHERE id = ?').run('failed', campaignId);
+        await db.query('UPDATE email_campaigns SET status = $1 WHERE id = $2', ['failed', campaignId]);
         return;
     }
 
     console.log(`Starting campaign ${campaignId} using ${config.provider} provider`);
 
-    const recipientIds = JSON.parse(campaign.recipient_ids);
-    const recipients = db.prepare(`SELECT * FROM email_recipients WHERE id IN (${recipientIds.map(() => '?').join(',')})`).all(...recipientIds) as any[];
+    const recipientIds = campaign.recipient_ids;
+    // Postgres ANY($1) for array lookup
+    const { rows: recipients } = await db.query('SELECT * FROM email_recipients WHERE id = ANY($1)', [recipientIds]);
 
-    db.prepare('UPDATE email_campaigns SET status = ?, total_recipients = ? WHERE id = ?').run('sending', recipients.length, campaignId);
+    await db.query('UPDATE email_campaigns SET status = $1, total_recipients = $2 WHERE id = $3', ['sending', recipients.length, campaignId]);
 
     let baseHtmlContent = campaign.html_content;
     if (!baseHtmlContent && campaign.template_id) {
-        const template = db.prepare('SELECT html_content FROM email_templates WHERE id = ?').get(campaign.template_id) as any;
-        baseHtmlContent = template?.html_content || '';
+        const { rows: templateRows } = await db.query('SELECT html_content FROM email_templates WHERE id = $1', [campaign.template_id]);
+        baseHtmlContent = templateRows[0]?.html_content || '';
     }
 
     let sentCount = 0;
@@ -163,11 +166,13 @@ export const processCampaign = async (campaignId: string, baseUrl: string) => {
     for (let i = 0; i < recipients.length; i++) {
         try {
             // Check for pause or cancellation
-            let currentStatus = (db.prepare('SELECT status FROM email_campaigns WHERE id = ?').get(campaignId) as any)?.status;
+            const { rows: statusRows } = await db.query('SELECT status FROM email_campaigns WHERE id = $1', [campaignId]);
+            let currentStatus = statusRows[0]?.status;
 
             while (currentStatus === 'paused') {
-                await sleep(5); // Wait 5 seconds and check again
-                currentStatus = (db.prepare('SELECT status FROM email_campaigns WHERE id = ?').get(campaignId) as any)?.status;
+                await sleep(5);
+                const { rows: statusRows2 } = await db.query('SELECT status FROM email_campaigns WHERE id = $1', [campaignId]);
+                currentStatus = statusRows2[0]?.status;
             }
 
             if (currentStatus !== 'sending') {
@@ -178,16 +183,16 @@ export const processCampaign = async (campaignId: string, baseUrl: string) => {
             const recipient = recipients[i];
             const logId = uuidv4();
 
-            db.prepare(`
-      INSERT INTO email_logs (id, campaign_id, recipient_id, recipient_email, status)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(logId, campaignId, recipient.id, recipient.email, 'pending');
+            await db.query(`
+                INSERT INTO email_logs (id, campaign_id, recipient_id, recipient_email, status)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [logId, campaignId, recipient.id, recipient.email, 'pending']);
 
             const personalizedHtml = processTemplateVariables(
                 baseHtmlContent,
                 recipient,
                 logId,
-                config.tracking_enabled === 1,
+                config.tracking_enabled,
                 baseUrl
             );
 
@@ -214,7 +219,7 @@ export const processCampaign = async (campaignId: string, baseUrl: string) => {
                     config.smtp_port,
                     config.smtp_user,
                     config.smtp_pass,
-                    config.smtp_secure === 1
+                    config.smtp_secure
                 );
             } else {
                 // Default to SendGrid
@@ -228,30 +233,29 @@ export const processCampaign = async (campaignId: string, baseUrl: string) => {
                 );
             }
 
-            db.prepare(`
-      UPDATE email_logs SET status = ?, error_message = ?, sent_at = CURRENT_TIMESTAMP WHERE id = ?
-    `).run(result.success ? 'sent' : 'failed', result.error ? JSON.stringify(result.error) : null, logId);
+            await db.query(`
+                UPDATE email_logs SET status = $1, error_message = $2, sent_at = CURRENT_TIMESTAMP WHERE id = $3
+            `, [result.success ? 'sent' : 'failed', result.error ? JSON.stringify(result.error) : null, logId]);
 
-            db.prepare('UPDATE email_recipients SET status = ? WHERE id = ?').run(result.success ? 'sent' : 'failed', recipient.id);
+            await db.query('UPDATE email_recipients SET status = $1 WHERE id = $2', [result.success ? 'sent' : 'failed', recipient.id]);
 
             if (result.success) sentCount++;
             else failedCount++;
 
-            db.prepare('UPDATE email_campaigns SET sent_count = ?, failed_count = ? WHERE id = ?').run(sentCount, failedCount, campaignId);
+            await db.query('UPDATE email_campaigns SET sent_count = $1, failed_count = $2 WHERE id = $3', [sentCount, failedCount, campaignId]);
 
             if (i < recipients.length - 1 && campaign.delay_seconds > 0) {
                 await sleep(campaign.delay_seconds);
             }
         } catch (error: any) {
             console.error(`Error processing recipient in campaign ${campaignId}:`, error.message);
-            // If campaign is missing, stop
-            const status = (db.prepare('SELECT status FROM email_campaigns WHERE id = ?').get(campaignId) as any)?.status;
-            if (!status) return;
+            const { rows: statusRows } = await db.query('SELECT status FROM email_campaigns WHERE id = $1', [campaignId]);
+            if (statusRows.length === 0) return;
         }
     }
 
     const finalStatus = failedCount === recipients.length ? 'failed' : 'sent';
-    db.prepare('UPDATE email_campaigns SET status = ?, sent_at = CURRENT_TIMESTAMP WHERE id = ?').run(finalStatus, campaignId);
+    await db.query('UPDATE email_campaigns SET status = $1, sent_at = CURRENT_TIMESTAMP WHERE id = $2', [finalStatus, campaignId]);
 
     // Telegram notification
     if (config.telegram_notifications_enabled && config.telegram_bot_token && config.telegram_chat_id) {

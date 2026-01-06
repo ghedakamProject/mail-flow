@@ -15,10 +15,8 @@ dist-ssr
 *.env.local
 
 # Database
-sqlite.db
-sqlite.db-journal
-sqlite.db-shm
-sqlite.db-wal
+*.sqlite
+*.db
 
 # Editor directories and files
 .vscode/*

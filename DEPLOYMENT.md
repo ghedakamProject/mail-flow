@@ -63,11 +63,12 @@ This generates a `dist` directory containing the optimized frontend assets and t
 Ensure your production `.env` file contains:
 - `PORT`: The port your backend server will listen on.
 - `NODE_ENV`: Set to `production`.
+- `DATABASE_URL`: Your PostgreSQL connection string (e.g., `postgresql://user:password@localhost:5432/mail_muse`).
 
 ## 5. Database Management
-Mail Muse uses SQLite. The database file (`sqlite.db`) is automatically created on migrations. If you are moving from local to production, you might want to transfer the `sqlite.db` file if it contains initial data (like recipients or templates).
+Mail Muse uses PostgreSQL. Ensure your database server is running and accessible via the `DATABASE_URL` provided in your environmental variables. The system will automatically initialize the tables on the first run.
 
 ---
 
 > [!WARNING]
-> Never commit your `.env` file or `sqlite.db` to a public repository. Ensure they are in your `.gitignore`.
+> Never commit your `.env` file to a public repository. Ensure it is in your `.gitignore`.

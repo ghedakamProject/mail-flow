@@ -18,9 +18,6 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Initialize Database
-initDb();
-
 // API Routes
 app.use('/api', apiRoutes);
 
@@ -67,11 +64,23 @@ app.get('*', (req, res) => {
         res.status(404).json({
             error: 'API route not found',
             path: req.path,
-            note: 'Ensure Nginx proxy_pass is NOT pointing to /api'
         });
     }
 });
 
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-});
+// Initialize Database and Start Server
+const startServer = async () => {
+    try {
+        await initDb();
+        console.log('Database initialized successfully');
+
+        app.listen(port, () => {
+            console.log(`Server running at http://localhost:${port}`);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+};
+
+startServer();

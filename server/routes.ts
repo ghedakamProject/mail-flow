@@ -1,185 +1,245 @@
 import express from 'express';
-import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import db from './db.js';
 
 const router = express.Router();
 
 // --- Recipients ---
-router.get('/recipients', (req, res) => {
-    const recipients = db.prepare('SELECT * FROM email_recipients ORDER BY created_at DESC').all();
-    res.json(recipients);
+router.get('/recipients', async (req, res) => {
+    try {
+        const { rows } = await db.query('SELECT * FROM email_recipients ORDER BY created_at DESC');
+        res.json(rows);
+    } catch (error: any) {
+        console.error('Failed to get recipients:', error);
+        res.status(500).json({ error: 'Failed to get recipients', message: error.message });
+    }
 });
 
-router.post('/recipients', (req, res) => {
-    const { email, name } = req.body;
-    const id = uuidv4();
-    db.prepare('INSERT INTO email_recipients (id, email, name) VALUES (?, ?, ?)').run(id, email, name);
-    const recipient = db.prepare('SELECT * FROM email_recipients WHERE id = ?').get(id);
-    res.json(recipient);
+router.post('/recipients', async (req, res) => {
+    try {
+        const { email, name } = req.body;
+        const id = uuidv4();
+        await db.query('INSERT INTO email_recipients (id, email, name) VALUES ($1, $2, $3)', [id, email, name]);
+        const { rows } = await db.query('SELECT * FROM email_recipients WHERE id = $1', [id]);
+        res.json(rows[0]);
+    } catch (error: any) {
+        console.error('Failed to create recipient:', error);
+        res.status(500).json({ error: 'Failed to create recipient', message: error.message });
+    }
 });
 
-router.delete('/recipients/:id', (req, res) => {
+router.delete('/recipients/:id', async (req, res) => {
+    const client = await db.pool.connect();
     try {
         const { id } = req.params;
-
-        // Use a transaction to ensure both logs and recipient are deleted
-        const deleteTx = db.transaction(() => {
-            // Delete associated logs first to avoid any potential constraint issues or slow CASCADE
-            db.prepare('DELETE FROM email_logs WHERE recipient_id = ?').run(id);
-            // Then delete the recipient
-            db.prepare('DELETE FROM email_recipients WHERE id = ?').run(id);
-        });
-
-        deleteTx();
+        await client.query('BEGIN');
+        await client.query('DELETE FROM email_logs WHERE recipient_id = $1', [id]);
+        await client.query('DELETE FROM email_recipients WHERE id = $1', [id]);
+        await client.query('COMMIT');
         res.status(204).end();
     } catch (error: any) {
+        await client.query('ROLLBACK');
         console.error(`ERROR: Failed to delete recipient ${req.params.id}:`, error);
         res.status(500).json({
             error: 'Failed to delete recipient',
             message: error.message,
             stack: error.stack
         });
+    } finally {
+        client.release();
     }
 });
 
 // --- Templates ---
-router.get('/templates', (req, res) => {
-    const templates = db.prepare('SELECT * FROM email_templates ORDER BY created_at DESC').all();
-    res.json(templates);
+router.get('/templates', async (req, res) => {
+    try {
+        const { rows } = await db.query('SELECT * FROM email_templates ORDER BY created_at DESC');
+        res.json(rows);
+    } catch (error: any) {
+        console.error('Failed to get templates:', error);
+        res.status(500).json({ error: 'Failed to get templates', message: error.message });
+    }
 });
 
-router.post('/templates', (req, res) => {
-    const { name, subject, html_content } = req.body;
-    const id = uuidv4();
-    db.prepare('INSERT INTO email_templates (id, name, subject, html_content) VALUES (?, ?, ?, ?)').run(id, name, subject, html_content);
-    const template = db.prepare('SELECT * FROM email_templates WHERE id = ?').get(id);
-    res.json(template);
+router.post('/templates', async (req, res) => {
+    try {
+        const { name, subject, html_content } = req.body;
+        const id = uuidv4();
+        await db.query('INSERT INTO email_templates (id, name, subject, html_content) VALUES ($1, $2, $3, $4)', [id, name, subject, html_content]);
+        const { rows } = await db.query('SELECT * FROM email_templates WHERE id = $1', [id]);
+        res.json(rows[0]);
+    } catch (error: any) {
+        console.error('Failed to create template:', error);
+        res.status(500).json({ error: 'Failed to create template', message: error.message });
+    }
 });
 
-router.delete('/templates/:id', (req, res) => {
-    db.prepare('DELETE FROM email_templates WHERE id = ?').run(req.params.id);
-    res.status(204).end();
+router.delete('/templates/:id', async (req, res) => {
+    try {
+        await db.query('DELETE FROM email_templates WHERE id = $1', [req.params.id]);
+        res.status(204).end();
+    } catch (error: any) {
+        console.error('Failed to delete template:', error);
+        res.status(500).json({ error: 'Failed to delete template', message: error.message });
+    }
 });
 
 // --- Campaigns ---
-router.get('/campaigns', (req, res) => {
-    const campaigns = db.prepare('SELECT * FROM email_campaigns ORDER BY created_at DESC').all();
-    // Parse recipient_ids JSON string
-    const formattedCampaigns = campaigns.map((c: any) => ({
-        ...c,
-        recipient_ids: JSON.parse(c.recipient_ids)
-    }));
-    res.json(formattedCampaigns);
+router.get('/campaigns', async (req, res) => {
+    try {
+        const { rows } = await db.query('SELECT * FROM email_campaigns ORDER BY created_at DESC');
+        // recipient_ids is already JSONB in Postgres, no need to parse if pg-types handles it
+        // but if it's stored as JSON string in JSONB, we might need a map.
+        // Usually pg-types parses JSONB automatically.
+        res.json(rows);
+    } catch (error: any) {
+        console.error('Failed to get campaigns:', error);
+        res.status(500).json({ error: 'Failed to get campaigns', message: error.message });
+    }
 });
 
-router.post('/campaigns', (req, res) => {
-    const { name, subject, html_content, template_id, recipient_ids, delay_seconds, scheduled_at } = req.body;
-    const id = uuidv4();
-    const status = scheduled_at ? 'scheduled' : 'draft';
+router.post('/campaigns', async (req, res) => {
+    try {
+        const { name, subject, html_content, template_id, recipient_ids, delay_seconds, scheduled_at } = req.body;
+        const id = uuidv4();
+        const status = scheduled_at ? 'scheduled' : 'draft';
 
-    db.prepare(`
-    INSERT INTO email_campaigns (id, name, subject, html_content, template_id, recipient_ids, delay_seconds, status, scheduled_at, total_recipients)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, name, subject, html_content, template_id, JSON.stringify(recipient_ids), delay_seconds, status, scheduled_at, recipient_ids.length);
+        await db.query(`
+            INSERT INTO email_campaigns (id, name, subject, html_content, template_id, recipient_ids, delay_seconds, status, scheduled_at, total_recipients)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `, [id, name, subject, html_content, template_id, recipient_ids, delay_seconds, status, scheduled_at, recipient_ids.length]);
 
-    const campaign = db.prepare('SELECT * FROM email_campaigns WHERE id = ?').get(id) as any;
-    res.json({ ...campaign, recipient_ids: JSON.parse(campaign.recipient_ids) });
+        const { rows } = await db.query('SELECT * FROM email_campaigns WHERE id = $1', [id]);
+        res.json(rows[0]);
+    } catch (error: any) {
+        console.error('Failed to create campaign:', error);
+        res.status(500).json({ error: 'Failed to create campaign', message: error.message });
+    }
 });
 
-router.delete('/campaigns/:id', (req, res) => {
+router.delete('/campaigns/:id', async (req, res) => {
+    const client = await db.pool.connect();
     try {
         const id = req.params.id;
-
-        // Use a transaction to ensure both logs and campaign are deleted
-        const deleteTx = db.transaction(() => {
-            // Delete logs first to avoid foreign key constraints if CASCADE is not working
-            db.prepare('DELETE FROM email_logs WHERE campaign_id = ?').run(id);
-            db.prepare('DELETE FROM email_campaigns WHERE id = ?').run(id);
-        });
-
-        deleteTx();
+        await client.query('BEGIN');
+        await client.query('DELETE FROM email_logs WHERE campaign_id = $1', [id]);
+        await client.query('DELETE FROM email_campaigns WHERE id = $1', [id]);
+        await client.query('COMMIT');
         res.status(204).end();
     } catch (error: any) {
+        await client.query('ROLLBACK');
         console.error(`ERROR: Failed to delete campaign ${req.params.id}:`, error);
         res.status(500).json({
             error: 'Failed to delete campaign',
             message: error.message,
             stack: error.stack
         });
+    } finally {
+        client.release();
     }
 });
 
-router.patch('/campaigns/:id/status', (req, res) => {
-    const { status } = req.body;
-    db.prepare('UPDATE email_campaigns SET status = ? WHERE id = ?').run(status, req.params.id);
-    res.json({ success: true, status });
+router.patch('/campaigns/:id/status', async (req, res) => {
+    try {
+        const { status } = req.body;
+        await db.query('UPDATE email_campaigns SET status = $1 WHERE id = $2', [status, req.params.id]);
+        res.json({ success: true, status });
+    } catch (error: any) {
+        console.error('Failed to update campaign status:', error);
+        res.status(500).json({ error: 'Failed to update campaign status', message: error.message });
+    }
 });
 
 // --- Config ---
-router.get('/config', (req, res) => {
-    const config = db.prepare('SELECT * FROM mail_config LIMIT 1').get();
-    res.json(config);
+router.get('/config', async (req, res) => {
+    try {
+        const { rows } = await db.query('SELECT * FROM mail_config LIMIT 1');
+        res.json(rows[0]);
+    } catch (error: any) {
+        console.error('Failed to get config:', error);
+        res.status(500).json({ error: 'Failed to get config', message: error.message });
+    }
 });
 
-router.post('/config', (req, res) => {
-    const currentConfig = db.prepare('SELECT id FROM mail_config LIMIT 1').get() as any;
-    const {
-        provider, from_email, from_name, api_key,
-        mailgun_api_key, mailgun_domain,
-        smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure,
-        is_configured, tracking_enabled,
-        telegram_notifications_enabled, telegram_bot_token, telegram_chat_id
-    } = req.body;
+router.post('/config', async (req, res) => {
+    try {
+        const { rows: currentConfigRows } = await db.query('SELECT id FROM mail_config LIMIT 1');
+        const currentConfig = currentConfigRows[0];
+        const {
+            provider, from_email, from_name, api_key,
+            mailgun_api_key, mailgun_domain,
+            smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure,
+            is_configured, tracking_enabled,
+            telegram_notifications_enabled, telegram_bot_token, telegram_chat_id
+        } = req.body;
 
-    if (currentConfig) {
-        db.prepare(`
-      UPDATE mail_config SET 
-        provider = ?, from_email = ?, from_name = ?, api_key = ?, 
-        mailgun_api_key = ?, mailgun_domain = ?, mailgun_region = ?,
-        smtp_host = ?, smtp_port = ?, smtp_user = ?, smtp_pass = ?, smtp_secure = ?,
-        is_configured = ?, tracking_enabled = ?, telegram_notifications_enabled = ?, 
-        telegram_bot_token = ?, telegram_chat_id = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(
-            provider || 'sendgrid', from_email, from_name, api_key,
-            mailgun_api_key, mailgun_domain, req.body.mailgun_region || 'us',
-            smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure ? 1 : 0,
-            is_configured ? 1 : 0, tracking_enabled ? 1 : 0, telegram_notifications_enabled ? 1 : 0,
-            telegram_bot_token, telegram_chat_id, currentConfig.id
-        );
-    } else {
-        db.prepare(`
-      INSERT INTO mail_config (
-        id, provider, from_email, from_name, api_key, 
-        mailgun_api_key, mailgun_domain, mailgun_region,
-        smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure,
-        is_configured, tracking_enabled, telegram_notifications_enabled, telegram_bot_token, telegram_chat_id
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-            uuidv4(), provider || 'sendgrid', from_email, from_name, api_key,
-            mailgun_api_key, mailgun_domain, req.body.mailgun_region || 'us',
-            smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure ? 1 : 0,
-            is_configured ? 1 : 0, tracking_enabled ? 1 : 0, telegram_notifications_enabled ? 1 : 0, telegram_bot_token, telegram_chat_id
-        );
+        if (currentConfig) {
+            await db.query(`
+                UPDATE mail_config SET 
+                    provider = $1, from_email = $2, from_name = $3, api_key = $4, 
+                    mailgun_api_key = $5, mailgun_domain = $6, mailgun_region = $7,
+                    smtp_host = $8, smtp_port = $9, smtp_user = $10, smtp_pass = $11, smtp_secure = $12,
+                    is_configured = $13, tracking_enabled = $14, telegram_notifications_enabled = $15, 
+                    telegram_bot_token = $16, telegram_chat_id = $17, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $18
+            `, [
+                provider || 'sendgrid', from_email, from_name, api_key,
+                mailgun_api_key, mailgun_domain, req.body.mailgun_region || 'us',
+                smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure,
+                is_configured, tracking_enabled, telegram_notifications_enabled,
+                telegram_bot_token, telegram_chat_id, currentConfig.id
+            ]);
+        } else {
+            await db.query(`
+                INSERT INTO mail_config (
+                    id, provider, from_email, from_name, api_key, 
+                    mailgun_api_key, mailgun_domain, mailgun_region,
+                    smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure,
+                    is_configured, tracking_enabled, telegram_notifications_enabled, telegram_bot_token, telegram_chat_id
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            `, [
+                uuidv4(), provider || 'sendgrid', from_email, from_name, api_key,
+                mailgun_api_key, mailgun_domain, req.body.mailgun_region || 'us',
+                smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure,
+                is_configured, tracking_enabled, telegram_notifications_enabled, telegram_bot_token, telegram_chat_id
+            ]);
+        }
+
+        const { rows } = await db.query('SELECT * FROM mail_config LIMIT 1');
+        res.json(rows[0]);
+    } catch (error: any) {
+        console.error('Failed to update config:', error);
+        res.status(500).json({ error: 'Failed to update config', message: error.message });
     }
-
-    const config = db.prepare('SELECT * FROM mail_config LIMIT 1').get();
-    res.json(config);
 });
 
 // --- Stats & Logs ---
-router.get('/campaigns/:id/logs', (req, res) => {
-    const logs = db.prepare('SELECT * FROM email_logs WHERE campaign_id = ? ORDER BY created_at DESC').all(req.params.id);
-    res.json(logs);
+router.get('/campaigns/:id/logs', async (req, res) => {
+    try {
+        const { rows } = await db.query('SELECT * FROM email_logs WHERE campaign_id = $1 ORDER BY created_at DESC', [req.params.id]);
+        res.json(rows);
+    } catch (error: any) {
+        console.error('Failed to get logs:', error);
+        res.status(500).json({ error: 'Failed to get logs', message: error.message });
+    }
 });
 
-router.get('/stats/summary', (req, res) => {
-    const totalSent = (db.prepare('SELECT SUM(sent_count) as total FROM email_campaigns').get() as any).total || 0;
-    const totalFailed = (db.prepare('SELECT SUM(failed_count) as total FROM email_campaigns').get() as any).total || 0;
-    const totalCampaigns = (db.prepare('SELECT COUNT(*) as total FROM email_campaigns').get() as any).total || 0;
-    res.json({ totalSent, totalFailed, totalCampaigns });
+router.get('/stats/summary', async (req, res) => {
+    try {
+        const { rows: sentRows } = await db.query('SELECT SUM(sent_count) as total FROM email_campaigns');
+        const { rows: failedRows } = await db.query('SELECT SUM(failed_count) as total FROM email_campaigns');
+        const { rows: countRows } = await db.query('SELECT COUNT(*) as total FROM email_campaigns');
+
+        const totalSent = parseInt(sentRows[0]?.total || '0', 10);
+        const totalFailed = parseInt(failedRows[0]?.total || '0', 10);
+        const totalCampaigns = parseInt(countRows[0]?.total || '0', 10);
+
+        res.json({ totalSent, totalFailed, totalCampaigns });
+    } catch (error: any) {
+        console.error('Failed to get stats:', error);
+        res.status(500).json({ error: 'Failed to get stats', message: error.message });
+    }
 });
 
 export default router;
