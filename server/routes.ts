@@ -1,6 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import db from './db.js';
+import { sendEmail, processTemplateVariables } from './mailer.js';
 
 const router = express.Router();
 
@@ -239,6 +240,35 @@ router.get('/stats/summary', async (req, res) => {
     } catch (error: any) {
         console.error('Failed to get stats:', error);
         res.status(500).json({ error: 'Failed to get stats', message: error.message });
+    }
+});
+
+// --- Test Email ---
+router.post('/test-email', async (req, res) => {
+    try {
+        const { to, subject, html } = req.body;
+        const { rows } = await db.query('SELECT * FROM mail_config LIMIT 1');
+        const config = rows[0];
+
+        if (!config || !config.is_configured) {
+            return res.status(400).json({ error: 'Email provider not configured' });
+        }
+
+        // Mock recipient for variable substitution
+        const recipient = { email: to, name: 'Test User' };
+        // We pass empty baseUrl since tracking is disabled for tests
+        const processedHtml = processTemplateVariables(html, recipient, 'test-id', false, '');
+
+        const result = await sendEmail(to, subject, processedHtml, config);
+
+        if (result.success) {
+            res.json({ success: true });
+        } else {
+            res.status(500).json({ error: result.error });
+        }
+    } catch (error: any) {
+        console.error('Failed to send test email:', error);
+        res.status(500).json({ error: 'Failed to send test email', message: error.message });
     }
 });
 

@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const sleep = (seconds: number) => new Promise(resolve => setTimeout(resolve, seconds * 1000));
 
-const processTemplateVariables = (
+export const processTemplateVariables = (
     htmlContent: string,
     recipient: { email: string; name?: string },
     logId: string,
@@ -133,6 +133,49 @@ const sendWithSMTP = async (
     }
 };
 
+export const sendEmail = async (
+    to: string,
+    subject: string,
+    htmlContent: string,
+    config: any
+) => {
+    if (config.provider === 'mailgun') {
+        return sendWithMailgun(
+            to,
+            subject,
+            htmlContent,
+            config.from_email,
+            config.from_name,
+            config.mailgun_api_key,
+            config.mailgun_domain,
+            config.mailgun_region
+        );
+    } else if (config.provider === 'smtp') {
+        return sendWithSMTP(
+            to,
+            subject,
+            htmlContent,
+            config.from_email,
+            config.from_name,
+            config.smtp_host,
+            config.smtp_port,
+            config.smtp_user,
+            config.smtp_pass,
+            config.smtp_secure
+        );
+    } else {
+        // Default to SendGrid
+        return sendWithSendGrid(
+            to,
+            subject,
+            htmlContent,
+            config.from_email,
+            config.from_name,
+            config.api_key
+        );
+    }
+};
+
 export const processCampaign = async (campaignId: string, baseUrl: string) => {
     const { rows: campaignRows } = await db.query('SELECT * FROM email_campaigns WHERE id = $1', [campaignId]);
     const campaign = campaignRows[0];
@@ -196,42 +239,12 @@ export const processCampaign = async (campaignId: string, baseUrl: string) => {
                 baseUrl
             );
 
-            let result;
-            if (config.provider === 'mailgun') {
-                result = await sendWithMailgun(
-                    recipient.email,
-                    campaign.subject,
-                    personalizedHtml,
-                    config.from_email,
-                    config.from_name,
-                    config.mailgun_api_key,
-                    config.mailgun_domain,
-                    config.mailgun_region
-                );
-            } else if (config.provider === 'smtp') {
-                result = await sendWithSMTP(
-                    recipient.email,
-                    campaign.subject,
-                    personalizedHtml,
-                    config.from_email,
-                    config.from_name,
-                    config.smtp_host,
-                    config.smtp_port,
-                    config.smtp_user,
-                    config.smtp_pass,
-                    config.smtp_secure
-                );
-            } else {
-                // Default to SendGrid
-                result = await sendWithSendGrid(
-                    recipient.email,
-                    campaign.subject,
-                    personalizedHtml,
-                    config.from_email,
-                    config.from_name,
-                    config.api_key
-                );
-            }
+            const result = await sendEmail(
+                recipient.email,
+                campaign.subject,
+                personalizedHtml,
+                config
+            );
 
             await db.query(`
                 UPDATE email_logs SET status = $1, error_message = $2, sent_at = CURRENT_TIMESTAMP WHERE id = $3

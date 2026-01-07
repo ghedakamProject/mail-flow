@@ -104,7 +104,17 @@ export const useSendgridConfig = () => {
 
   const sendTestEmail = useMutation({
     mutationFn: async ({ toEmail, subject, htmlContent }: { toEmail: string; subject: string; htmlContent: string }) => {
-      toast.info('Use "Start Campaign" to test sending for now');
+      await api.post('/test-email', {
+        to: toEmail,
+        subject,
+        html: htmlContent,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Test email sent successfully');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to send test email: ${error.message}`);
     },
   });
 

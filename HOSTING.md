@@ -34,6 +34,7 @@ sudo systemctl enable postgresql
 sudo -u postgres psql -c "CREATE DATABASE mail_muse;"
 sudo -u postgres psql -c "CREATE USER mailmuseuser WITH PASSWORD 'yourpassword';"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE mail_muse TO mailmuseuser;"
+sudo -u postgres psql -d mail_muse -c "GRANT ALL ON SCHEMA public TO mailmuseuser;"
 ```
 
 ## 5. Setup the Application
