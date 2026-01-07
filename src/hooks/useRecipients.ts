@@ -35,17 +35,15 @@ export const useRecipients = () => {
   });
 
   const addBulkRecipients = useMutation({
-    mutationFn: async (emails: string[]) => {
-      for (const email of emails) {
-        await api.post('/recipients', { email: email.trim() });
-      }
+    mutationFn: async (recipients: { email: string; name?: string }[]) => {
+      await api.post('/recipients/bulk', recipients);
     },
-    onSuccess: (_, emails) => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['recipients'] });
-      toast.success(`Added ${emails.length} recipients successfully`);
+      toast.success(`Imported ${variables.length} recipients successfully`);
     },
     onError: (error: any) => {
-      toast.error(`Failed to add recipients: ${error.message}`);
+      toast.error(`Failed to import recipients: ${error.message}`);
     },
   });
 

@@ -56,7 +56,7 @@ export default function Recipients() {
       .map((e) => e.trim())
       .filter((e) => e && e.includes('@'));
     if (emails.length > 0) {
-      addBulkRecipients(emails);
+      addBulkRecipients(emails.map(e => ({ email: e })));
       setBulkEmails('');
       setIsBulkDialogOpen(false);
     }
@@ -70,36 +70,33 @@ export default function Recipients() {
     reader.onload = (e) => {
       const text = e.target?.result as string;
       const lines = text.split('\n').filter(line => line.trim());
-      
+
       // Skip header row if it exists
       const hasHeader = lines[0]?.toLowerCase().includes('email');
       const dataLines = hasHeader ? lines.slice(1) : lines;
-      
+
       const parsedRecipients: { email: string; name?: string }[] = [];
-      
+
       dataLines.forEach(line => {
         const parts = line.split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
         const email = parts[0];
         const name = parts[1] || undefined;
-        
+
         if (email && email.includes('@')) {
           parsedRecipients.push({ email, name });
         }
       });
 
       if (parsedRecipients.length > 0) {
-        // Use bulk add for emails only, names will be lost in current implementation
-        // For full support, we'd need to update the hook
-        const emails = parsedRecipients.map(r => r.email);
-        addBulkRecipients(emails);
-        toast.success(`Imported ${parsedRecipients.length} recipients from CSV`);
+        addBulkRecipients(parsedRecipients);
+        // toast success is handled in hook
         setIsCsvDialogOpen(false);
       } else {
         toast.error('No valid emails found in CSV');
       }
     };
     reader.readAsText(file);
-    
+
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -158,7 +155,7 @@ export default function Recipients() {
                       Download Sample CSV
                     </Button>
                   </div>
-                  
+
                   <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
                     <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground mb-4">

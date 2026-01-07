@@ -29,6 +29,47 @@ router.post('/recipients', async (req, res) => {
     }
 });
 
+router.post('/recipients/bulk', async (req, res) => {
+    const client = await db.pool.connect();
+    try {
+        const recipients = req.body; // Expects array of { email, name? }
+        if (!Array.isArray(recipients) || recipients.length === 0) {
+            return res.status(400).json({ error: 'Invalid input: expected non-empty array of recipients' });
+        }
+
+        await client.query('BEGIN');
+
+        // We use a single query for efficiency. 
+        // Note: For extremely large batches (e.g. 10k+), we might need to chunk this, 
+        // but for <1000 items this is fine.
+        const values: any[] = [];
+        const placeholders: string[] = [];
+
+        recipients.forEach((r, index) => {
+            const i = index * 3;
+            values.push(uuidv4(), r.email, r.name || null);
+            placeholders.push(`($${i + 1}, $${i + 2}, $${i + 3})`);
+        });
+
+        const query = `
+            INSERT INTO email_recipients (id, email, name) 
+            VALUES ${placeholders.join(', ')}
+            ON CONFLICT (email) DO NOTHING
+        `;
+
+        await client.query(query, values);
+        await client.query('COMMIT');
+
+        res.json({ success: true, count: recipients.length });
+    } catch (error: any) {
+        await client.query('ROLLBACK');
+        console.error('Failed to bulk add recipients:', error);
+        res.status(500).json({ error: 'Failed to bulk add recipients', message: error.message });
+    } finally {
+        client.release();
+    }
+});
+
 router.delete('/recipients/:id', async (req, res) => {
     const client = await db.pool.connect();
     try {
